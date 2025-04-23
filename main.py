@@ -42,7 +42,7 @@ class experiment_settings:
     pixel_Y = int(range_Y/y_pixel_to_um +1)
     pixel_num = pixel_Y * pixel_X
 
-ifdouble =False
+ifdouble =True
 
 data = data.to_numpy(dtype=np.float32)
 data_FC= data[:,1]
@@ -58,30 +58,10 @@ del data_append
 interpolator = interp1d(refvolt, reffreq, kind='linear', fill_value="extrapolate")
 data_FC= interpolator(data_FC)
 
-# 绘制原始数据点和插值结果
-'''plt.figure()
-plt.plot(refvolt, reffreq, 'o-', label='Original Data', markerfacecolor='red')  # 原始数据点
-plt.plot(data[:141,1], data_FC[:141], 'x', label='Interpolated Values', markerfacecolor='blue', markersize=15, markeredgewidth=2) 
-plt.xlabel('Voltage')
-plt.ylabel('Frequency')
-plt.legend()
-plt.show()'''
-#npdata[np.arange(400000,np.size(npdata),200001)]
-#data_LIA=np.delete(npdata,np.append(np.arange(400000,np.size(npdata),200001),np.size(npdata)-1))#None at last bit
-#data_LIA=np.delete(npdata,np.arange(400000,np.size(npdata),200001))
-##preprocessing
-#sos=signal.butter(1,15,btype='hp',fs=50*100,output='sos')
-#y=signal.sosfilt(sos,data_LIA)
-#y_shift = 2
-#data_LIA = data_LIA + y_shift
-#y = y +y_shift
+
 
 data_X,data_Y=pipeline.preprocess(data_LIA,data_FC,experiment_settings.freq_num,experiment_settings.pixel_num,experiment_settings.n_planes)
-#experiment_settings.freq_num = 40
-#experiment_settings.freq_begin=data_X[0,0,16]
-#experiment_settings.freq_end=data_X[0,0,56]
-#data_X = data_X[:,:,16:56]
-#data_Y = data_Y[:,:,16:56]
+data_X = data_X + 0.09
 t3 = time.perf_counter()
 ##single peak fit
 initial_parameters = np.zeros((experiment_settings.pixel_num,4),dtype=np.float32)
@@ -96,7 +76,7 @@ constraints[:,1] = 2
 constraints[:,2] = 4.8
 constraints[:,3] = 5.65
 constraints[:,4] = 0.1
-constraints[:,5] = 0.5
+constraints[:,5] = 0.6
 constraints[:,6] = 0
 constraints[:,7] = 2
 
@@ -105,7 +85,6 @@ constraints[:,7] = 2
 volume, single_fit = pipeline.singlepeak(data_X,data_Y,experiment_settings,initial_parameters,constraints)
 #volume, single_fit = pipeline.cpufit(data_X,data_Y,experiment_settings,initial_parameters,constraints)
 
-#t3 = time.perf_counter()
 if ifdouble:
     volumesingle_peak, volume_double_peak, single_peak, double_peak = pipeline.double_peak(data_X,data_Y,experiment_settings,single_fit,constraints)
 t4 = time.perf_counter()
@@ -139,22 +118,9 @@ class static_fig(Myplot):
     def compute_initial_figure(self):
         z=0
         self.minfreq = 5
-        self.maxfreq = 6
+        self.maxfreq = 5.6
         pass
-        '''
 
-        imageshift = 2*max(experiment_settings.shift)
-        self.fig.clear() 
-        self.axes= self.fig.add_subplot(111)
-        x_0 = volume.shift[z]
-        x=np.linspace(0,np.size(x_0,0)*experiment_settings.y_pixel_to_um,np.size(x_0,0)+1,endpoint=True)
-        y=np.linspace(0,np.size(x_0,1)*experiment_settings.x_pixel_to_um,np.size(x_0,1)+1,endpoint=True)
-        self.c=self.axes.pcolormesh(y[imageshift:np.size(y)-imageshift],x,x_0[:,imageshift:np.size(x_0,1)-imageshift],cmap='jet',shading="auto",vmin=self.minfreq,vmax=self.maxfreq)
-        self.axes.set_title("image")
-        self.axes.set_xlabel("X in um")
-        self.axes.set_ylabel("Y in um")
-        self.fig.colorbar(self.c)
-        self.draw()'''
         
 
 class d_fig(Myplot):
@@ -190,6 +156,10 @@ class AppWindow(QMainWindow,Ui_MainWindow):
         self.zplane.valueChanged.connect(self.update_fig)
         self.zplane.valueChanged.connect(self.update_fig2)
         self.zplane.valueChanged.connect(self.update_freq)
+        self.f1.minfreq = 5.1
+        self.f1.maxfreq = 5.45
+        self.f2.minfreq = 0.2
+        self.f2.maxfreq = 0.4
         self.minfreq.setProperty("value", self.f1.minfreq)
         self.minfreq.valueChanged.connect(self.update_fig)
         self.maxfreq.setProperty("value", self.f1.maxfreq)
@@ -211,7 +181,7 @@ class AppWindow(QMainWindow,Ui_MainWindow):
         self.f2.mpl_connect('key_press_event', self.OnMove)
         self.comboBox.currentIndexChanged.connect(self.update_fig)
         self.comboBox.currentIndexChanged.connect(self.update_freq)
-        self.comboBox_2.setCurrentIndex(1)
+        self.comboBox_2.setCurrentIndex(2)
         self.comboBox_2.currentIndexChanged.connect(self.update_fig2)
         self.comboBox_2.currentIndexChanged.connect(self.update_freq)
         # add NavigationToolbar in the figure (widgets)
@@ -246,10 +216,11 @@ class AppWindow(QMainWindow,Ui_MainWindow):
             self.update_comboBox()
         else:
             self.double_peak.setChecked(False)
+        self.double_peak.setChecked(False)
         self.double_peak.toggled.connect(self.update_comboBox)
         
-        self.x1 = experiment_settings.pixel_X//2
-        self.y1 = experiment_settings.pixel_Y//2
+        self.x1 = experiment_settings.pixel_Y//2
+        self.y1 = experiment_settings.pixel_X//2
         self.update_fig()
         self.update_fig2()
         self.update_freq()
@@ -270,19 +241,16 @@ class AppWindow(QMainWindow,Ui_MainWindow):
         elif event.key == 'right':
             self.y1=(self.y1+1-2*max(experiment_settings.shift))%(experiment_settings.pixel_X-2*max(experiment_settings.shift))+2*max(experiment_settings.shift)
         elif event.key == 'up':
-            self.x1=(self.x1+1)%(experiment_settings.pixel_Y)
-        elif event.key == 'down':
             self.x1=(self.x1-1)%(experiment_settings.pixel_Y)
+        elif event.key == 'down':
+            self.x1=(self.x1+1)%(experiment_settings.pixel_Y)
 
         self.update_freq()    
         self.update_mark()
         self.update_mark2()    
     def update_comboBox(self):
+
         if self.double_peak.isChecked():
-            ifdouble = True
-        else:
-            ifdouble = False
-        if ifdouble:
             self.comboBox.addItem("")
             self.comboBox.setItemText(5, QtCore.QCoreApplication.translate("MainWindow", "l1_shift"))
             self.comboBox.addItem("")
@@ -369,6 +337,7 @@ class AppWindow(QMainWindow,Ui_MainWindow):
                   
         x=np.linspace(0,np.size(x_0,0)*experiment_settings.y_pixel_to_um,np.size(x_0,0)+1,endpoint=True)
         y=np.linspace(0,np.size(x_0,1)*experiment_settings.x_pixel_to_um,np.size(x_0,1)+1,endpoint=True)
+        self.f1.axes.invert_yaxis()
         self.f1.c=self.f1.axes.pcolormesh(y[imageshift:np.size(y)-imageshift],x,x_0[:,imageshift:np.size(x_0,1)-imageshift],cmap='jet',shading="auto",vmin=minfreq,vmax=maxfreq)
         self.f1.plotmark = self.f1.axes.plot(self.y1*experiment_settings.x_pixel_to_um, self.x1*experiment_settings.y_pixel_to_um, '+k')
         self.f1.axes.set_title(f"{para}")
@@ -442,6 +411,7 @@ class AppWindow(QMainWindow,Ui_MainWindow):
                   
         x=np.linspace(0,np.size(x_0,0)*experiment_settings.y_pixel_to_um,np.size(x_0,0)+1,endpoint=True)
         y=np.linspace(0,np.size(x_0,1)*experiment_settings.x_pixel_to_um,np.size(x_0,1)+1,endpoint=True)
+        self.f2.axes.invert_yaxis()
         self.f2.c=self.f2.axes.pcolormesh(y[imageshift:np.size(y)-imageshift],x,x_0[:,imageshift:np.size(x_0,1)-imageshift],cmap='jet',shading="auto",vmin=minfreq,vmax=maxfreq)
         self.f2.plotmark = self.f2.axes.plot(self.y1*experiment_settings.x_pixel_to_um, self.x1*experiment_settings.y_pixel_to_um, '+k')
         self.f2.axes.set_title(f"{para}")
@@ -449,7 +419,7 @@ class AppWindow(QMainWindow,Ui_MainWindow):
         self.f2.axes.set_ylabel("Y in um")
         self.f2.axes.set_aspect('equal', adjustable='box')
         self.f2.fig.colorbar(self.f2.c)
-        self.hist2.axes.hist(x_1,50)  
+        self.hist2.axes.hist(x_1,50)#,(0,0.5))  
         self.f2.draw() 
         self.hist2.draw()  
 
@@ -491,7 +461,7 @@ class AppWindow(QMainWindow,Ui_MainWindow):
         }
         self.fill_table_data(single_peak_data)
 
-        if ifdouble:
+        if self.double_peak.isChecked():
             ampl_1 = volume_double_peak.l1_amplitude[z,self.x1,self.y1]
             x_00_1 = volume_double_peak.l1_shift[z,self.x1,self.y1]
             gama_1 = volume_double_peak.l1_width[z,self.x1,self.y1]
@@ -546,9 +516,7 @@ app = QApplication(sys.argv)
 win = AppWindow()
 t5 = time.perf_counter()
 current_dir = os.getcwd()
-# 构建子文件夹的完整路径
 subfolder_path = os.path.join(current_dir, 'tiff_export')
-# 如果子文件夹不存在，则创建它
 if not os.path.exists(subfolder_path):
     os.makedirs(subfolder_path)
 image_path = os.path.join(subfolder_path, "shift")
