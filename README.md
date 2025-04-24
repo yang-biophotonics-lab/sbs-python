@@ -1,4 +1,4 @@
-```markdown
+
 # Data Processing and Visualization Pipeline
 
 ## Overview
